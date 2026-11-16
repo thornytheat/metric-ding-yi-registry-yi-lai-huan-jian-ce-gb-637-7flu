@@ -1,0 +1,6 @@
+left_source,left_name,right_source,right_name,state
+bi_hq,销售额,bi_store,销售额,confirmed
+bi_hq,销售额,bi_channel,销售额,confirmed
+bi_hq,客单价,bi_store,客单价,confirmed
+bi_store,退款率,bi_channel,退款率,confirmed
+bi_hq,销售额,bi_third,销售额,pending

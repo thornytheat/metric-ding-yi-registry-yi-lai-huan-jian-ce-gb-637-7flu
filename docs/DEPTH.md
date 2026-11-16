@@ -1,9 +1,10 @@
 # 深度登记 metricreg（指标定义注册与依赖环检测）
 
-- 规模：中型（7 个功能模块 / 7 个页面 / 81 个文件 / 101 条测试）
+- 规模：中型（8 个功能模块 / 8 个页面 / 90+ 个文件 / 122 条测试）
 - 核心规则一：**DSL 解析与登记**——一行一条 `name = expr [where …] [group by …] [depends: …]`，先做全角归一，再词法/语法分析；结构扫描与语法解析两条独立路径，检出项按固定优先级排序，规则书写顺序不影响结论。
 - 核心规则二：**依赖成环检测**——按指标→指标边建图，用显式栈迭代 Tarjan 求强连通分量；分量大小 >1 或单点自环即判环，给出环路路径；同名指标按聚合/过滤/分组差异分三级冲突，保留行号最小的一条。
 - 核心规则三：**下线与迁移次序**——环按分量计数（一个环只出一条，TRAP-27），单点只有自环才算环（孤立指标不进环，TRAP-28）；迁移次序按「依赖方先迁、被依赖方后下线」做确定性 Kahn 排序，环内指标进阻断表；同名指标按评估日生效版本说清下的是哪一版。
+- 核心规则四：**多来源同名合并**——身份键 `(来源, 指标名)` 让同名指标在各 BI 内独立；已确认等价关系用并查集连成跨来源链路、代表元按来源优先级取；未确认来源/关系先隔离，确认后整版原子发布并全量切换现网图与影响面，草稿期间继续展示旧版（TRAP-30/31/32/33）。
 - 使用者与工作流：星野零售指标体系组 6 人，180 个指标散落 6 个 BI，同名不同定义最耗时；现在一次粘贴即得到「注册表 + 诊断隔离 + 环路径 + 同名冲突 + 影响面 + 变更单导出」。
 
 ## 功能模块
@@ -17,6 +18,7 @@
 | M5 版本区间与批次 | 查版本台账、提交新版、拒绝陈旧提交、看批次历史 | GET /api/versions、POST /api/versions/submit、GET /api/batches、页面 /versions | `app/modules/m5_versions/intervals.py` `app/modules/m5_versions/stale.py` `app/modules/m5_versions/batches.py` | `tests/test_versions.py` |
 | M6 影响面与导出 | 算影响分、核四账、导出指标/边/冲突/清单 | GET /api/impact、GET /api/reconcile、GET /api/export/*、页面 /impact | `app/modules/m6_impact/impact.py` `app/modules/m6_impact/export_out.py` `app/modules/m6_impact/json_out.py` | `tests/test_impact.py` |
 | M7 下线影响 | 选下线指标，看受影响面、迁移次序与阻断项，导出清单 | GET /api/retire、POST /api/retire、GET /api/retire/order.csv、页面 /retire | `app/modules/m7_retire/cycles.py` `app/modules/m7_retire/order.py` `app/modules/m7_retire/plan.py` `app/modules/m7_retire/service.py` | `tests/test_retire.py` `tests/test_retire_cycles.py` `tests/test_retire_versions.py` |
+| M8 多来源同名合并 | 分来源接入、登记/确认等价关系、看待确认隔离与合并组代表元、草稿→原子发布、查现网图与多源影响面 | POST /api/sourcing/ingest、GET/POST /api/sourcing/links、POST /api/sourcing/revisions/*、GET /api/sourcing/live、GET /api/sourcing/impact、页面 /sourcing | `app/modules/m8_sourcing/merge.py` `app/modules/m8_sourcing/livegraph.py` `app/modules/m8_sourcing/repository.py` `app/modules/m8_sourcing/service.py` | `tests/test_sourcing_merge.py` `tests/test_sourcing_service.py` |
 
 端到端：`tests/test_e2e.py`（样例 → 接入 → 诊断 → 图 → 版本 → 影响面 → 导出，含 4xx 失败输入与幂等重跑）；
 下线计划走同一批次数据：`tests/test_retire.py`（环最小化、阻断项、版本含义、接口与页面）。
@@ -37,6 +39,10 @@
 | TRAP-26 | 两个组同时改同一指标，后提交的版本号更小 | 后提交无条件覆盖，先改的被静默丢掉 | 版本号必须大于库中最新值，否则 409 `V_STALE_SUBMIT` | `app/modules/m5_versions/stale.py` | `tests/test_versions.py::test_stale_submit_rejected` |
 | TRAP-27 | 同一环按起点轮转被重复计为多个环 | 环内每个成员各报一次，3 元环报 3 个环，环数虚高 | 环键取成员集合摘要，一个强连通分量只出一个环；轮转次数单列成对照 | `app/modules/m7_retire/cycles.py` | `tests/test_retire.py::test_ring_count_is_one_per_component` |
 | TRAP-28 | 孤立指标被误判为环 | 单点分量一律当环，21 个没有依赖边的指标全进阻断表 | 单点只有自环才算环；孤立指标单列，不进迁移次序 | `app/modules/m7_retire/order.py` | `tests/test_retire.py::test_isolated_nodes_are_not_rings` |
+| TRAP-30 | 多个 BI 补发同名指标，来源不同口径不同 | 后写覆盖前写，注册表里只剩一个版本，影响面算进无关报表 | 身份键 `(来源, 指标名)`，各来源独立成节点；来源内依赖边不跨来源，影响面不串来源 | `app/modules/m8_sourcing/merge.py` `app/modules/m8_sourcing/livegraph.py` | `tests/test_sourcing_merge.py::test_same_name_metrics_stay_independent_per_source` `tests/test_sourcing_service.py::test_impact_does_not_mix_unrelated_source_reports` |
+| TRAP-31 | 跨来源等价关系还没确认就被当成同义指标 | 未确认的三方口径直接并进现网，下游沿错误血缘追溯 | 仅「已确认」关系进并查集与等价边；纯 pending 成员先隔离，确认链路中的成员不被新 pending 误伤 | `app/modules/m8_sourcing/merge.py` | `tests/test_sourcing_merge.py::test_pending_link_isolates_only_unconfirmed_member` |
+| TRAP-32 | 等价关系是无向的，却按有向边只存一个方向 | 从代表元反向追溯漏掉链路另一侧来源，影响面少算报表 | 每个已确认等价关系存一对双向有向边，反向可达覆盖链路全部来源 | `app/modules/m8_sourcing/livegraph.py` | `tests/test_sourcing_merge.py::test_equivalence_edges_are_undirected_in_snapshot` |
+| TRAP-33 | 新版本还没发布完，现网就被半组新半组旧地切换 | 草稿写入即生效，发布中途失败留下撕裂的现网图 | 草稿（staging）不动现网指针，发布原子地把旧版置 superseded、新版置 published 并切换唯一现网指针；未发布继续展示旧版 | `app/modules/m8_sourcing/repository.py` `app/modules/m8_sourcing/service.py` | `tests/test_sourcing_service.py::test_staging_revision_keeps_old_live_result` `tests/test_sourcing_service.py::test_confirm_then_publish_switches_live` |
 
 ## 四账
 
@@ -53,6 +59,7 @@
 - 反例（M7）：`tests/test_retire_cycles.py::test_one_ring_per_component_not_per_start`（3 元环按起点会报 3 个）、`tests/test_retire_cycles.py::test_isolated_singleton_without_self_loop_is_not_ring`（单点无自环不是环）、`tests/test_impact.py::test_downstream_excludes_self_reference`（自环不算下游）。
 - 不变量（M7）：`tests/test_retire.py::test_affected_is_split_between_order_and_blocked`（受影响 = 可排序 + 阻断）、`tests/test_retire_cycles.py::test_kahn_order_ignores_insertion_order`（次序与插入顺序无关）、`tests/test_retire_cycles.py::test_two_disjoint_rings_count_two`（环成员不重不漏）。
 - 端到端：`tests/test_e2e.py::test_pipeline_from_sample_to_export`。
+- 多来源（M8）：`tests/test_sourcing_merge.py`（并查集顺序无关、优先级代表元、隔离边界、无向等价）、`tests/test_sourcing_service.py`（幂等接入、草稿不切现网、确认后原子全量切换、HTTP 与页面）。
 
 ## 已知不覆盖
 
@@ -64,3 +71,6 @@
 - M7 只出计划不改数据：不写回注册表、不自动改报表，迁移清单导出 CSV 交人工执行。
 - 迁移次序按指标→指标边排，不细分报表内部的字段级改动；报表只作为受影响清单出现。
 - 下线请求台账只认 metric/reason/owner/requested_on 四列，不校验申请人与审批状态。
+- M8 等价关系是人工确认的显式台账，不做口径自动比对推断；来源优先级在配置里登记，不支持运行期动态改优先级。
+- M8 现网快照只保留版本序列与唯一现网指针，不做历史快照的差异 diff 与回滚接口；回滚靠重新发布对应版本。
+- M8 不跨来源合并字段/维度节点，等价链路只在指标层建立，报表始终是叶子节点。

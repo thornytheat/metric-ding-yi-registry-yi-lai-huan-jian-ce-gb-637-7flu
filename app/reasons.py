@@ -163,6 +163,46 @@ REASONS = {
     "R_ISOLATED_SKIPPED": _r(
         "R_ISOLATED_SKIPPED", INFO, "retire",
         "孤立指标没有依赖边，不进迁移次序", "孤立指标可直接下线"),
+    # ---- M8 多来源同名指标合并 ----
+    "S_SOURCE_UNKNOWN": _r(
+        "S_SOURCE_UNKNOWN", ERROR, "sourcing",
+        "来源不在来源优先级登记表", "改用已登记的来源编码，或在登记表补来源"),
+    "S_SOURCE_PARSE_FAILED": _r(
+        "S_SOURCE_PARSE_FAILED", ERROR, "sourcing",
+        "来源 DSL 存在无法登记的定义行", "先按诊断原因修正后重跑，错误行不进该来源注册表"),
+    "S_LINK_UNKNOWN_MEMBER": _r(
+        "S_LINK_UNKNOWN_MEMBER", ERROR, "sourcing",
+        "等价关系指向尚未登记的来源指标", "先接入对应来源，再登记等价关系"),
+    "S_LINK_DUPLICATE": _r(
+        "S_LINK_DUPLICATE", WARN, "sourcing",
+        "等价关系已登记，重复登记不重复建链", "确认状态以最新一次确认为准"),
+    "S_LINK_PENDING_ISOLATED": _r(
+        "S_LINK_PENDING_ISOLATED", WARN, "sourcing",
+        "等价关系尚未确认，相关来源指标先隔离", "确认后下一次发布即并入合并链路"),
+    "S_LINK_CONFIRMED": _r(
+        "S_LINK_CONFIRMED", INFO, "sourcing",
+        "跨来源等价关系已确认并连成链路", "发布后下游可沿等价边跨来源追溯"),
+    "S_GROUP_CANONICAL": _r(
+        "S_GROUP_CANONICAL", INFO, "sourcing",
+        "合并组代表元取来源优先级最高者", "其余来源同名指标作为组成员保留，不覆盖代表元"),
+    "S_MEMBER_ISOLATED": _r(
+        "S_MEMBER_ISOLATED", WARN, "sourcing",
+        "来源或等价关系未确认，成员保持隔离", "隔离成员不进现网图，影响面不计其报表"),
+    "S_REVISION_STAGING": _r(
+        "S_REVISION_STAGING", INFO, "sourcing",
+        "现网版本仍在待发布，现网继续展示上一版结果", "发布完成后才全量切换"),
+    "S_REVISION_PUBLISHED": _r(
+        "S_REVISION_PUBLISHED", INFO, "sourcing",
+        "现网版本已原子发布并全量切换", "现网图与影响面同步到该版本快照"),
+    "S_CUTOVER_ATOMIC": _r(
+        "S_CUTOVER_ATOMIC", INFO, "sourcing",
+        "一次发布内整版切换，不存在半组新半组旧", "任一组成员未就绪则该版保持待发布"),
+    "S_NO_PUBLISHED": _r(
+        "S_NO_PUBLISHED", WARN, "sourcing",
+        "还没有已发布的现网版本", "首次确认并发布后才会生成现网图与影响面"),
+    "S_REPLAY_NO_NEW_NODE": _r(
+        "S_REPLAY_NO_NEW_NODE", INFO, "sourcing",
+        "同一来源同内容重跑命中摘要，不新增节点或报表", "内容变化才会产生新版本节点"),
     "B_IDEMPOTENT_REPLAY": _r(
         "B_IDEMPOTENT_REPLAY", INFO, "ingest",
         "输入摘要命中已完成批次，复用结果", "同一输入重跑不新增行"),

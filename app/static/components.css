@@ -195,6 +195,31 @@ button[disabled] { opacity: 0.5; cursor: default; }
 
 hr.sep { border: 0; border-top: 1px dashed var(--line-strong); margin: 12px 0; }
 
+/* M8 多来源合并 */
+button.act {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 1px solid var(--accent);
+  padding: 6px 16px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.act.small { padding: 2px 10px; font-size: 12px; }
+.rule-list { margin: 6px 0 0; padding-left: 18px; color: var(--ink-muted); line-height: 1.7; }
+.rule-list b { color: var(--ink); }
+.chip {
+  display: inline-block;
+  border: 1px solid var(--line-strong);
+  padding: 0 5px;
+  margin: 1px 2px 1px 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.chip-canonical { border-color: var(--ok); color: var(--ok); }
+.chip-linked { border-color: var(--info); color: var(--info); }
+.chip-isolated { border-color: var(--warn); color: var(--warn); }
+
 @media (max-width: 720px) {
   .tbl td.cut { max-width: 160px; }
 }

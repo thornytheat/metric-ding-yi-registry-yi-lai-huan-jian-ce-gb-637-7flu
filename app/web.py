@@ -25,6 +25,7 @@ NAV = (
     ("/versions", "版本", "versions"),
     ("/impact", "影响", "impact"),
     ("/retire", "下线", "retire"),
+    ("/sourcing", "多源", "sourcing"),
 )
 STATUS_LABELS = {
     "done": "完成", "failed": "失败", "running": "运行中",
@@ -32,6 +33,9 @@ STATUS_LABELS = {
     "OK": "有效", "OVERLAP": "区间重叠", "INVERTED": "起止倒挂",
     "BAD_FROM": "起始无效", "UNKNOWN": "未注册",
     "BLOCK": "阻断", "REVIEW": "复核", "INFO": "记录",
+    "pending": "待确认", "confirmed": "已确认",
+    "staging": "待发布", "published": "现网", "superseded": "旧版",
+    "canonical": "代表元", "linked": "链路内",
 }
 KIND_LABELS = {"metric": "指标", "field": "字段", "dim": "维度", "report": "报表"}
 

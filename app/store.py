@@ -69,6 +69,45 @@ CREATE TABLE IF NOT EXISTS totals (
 CREATE TABLE IF NOT EXISTS manifests (
     batch_id TEXT PRIMARY KEY, json TEXT NOT NULL
 );
+-- ===== M8 多来源同名指标合并：独立表族，与 M1–M7 批次表互不写对方 =====
+CREATE TABLE IF NOT EXISTS src_sources (
+    source_code TEXT PRIMARY KEY, label TEXT NOT NULL, priority INTEGER NOT NULL,
+    created_at TEXT NOT NULL, note TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS src_metric_runs (
+    source_code TEXT NOT NULL, content_digest TEXT NOT NULL, run_id TEXT NOT NULL,
+    status TEXT NOT NULL, metric_count INTEGER NOT NULL, report_count INTEGER NOT NULL,
+    created_at TEXT NOT NULL, note TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (source_code, content_digest)
+);
+CREATE TABLE IF NOT EXISTS src_metrics (
+    source_code TEXT NOT NULL, name TEXT NOT NULL, line_no INTEGER NOT NULL,
+    signature TEXT NOT NULL, expr_json TEXT NOT NULL, where_json TEXT NOT NULL,
+    group_by_json TEXT NOT NULL, fields_json TEXT NOT NULL, metrics_json TEXT NOT NULL,
+    deps_json TEXT NOT NULL, aggs_json TEXT NOT NULL, expr_text TEXT NOT NULL DEFAULT '',
+    content_digest TEXT NOT NULL, updated_at TEXT NOT NULL,
+    PRIMARY KEY (source_code, name)
+);
+CREATE TABLE IF NOT EXISTS src_reports (
+    source_code TEXT NOT NULL, report_id TEXT NOT NULL, report_name TEXT NOT NULL,
+    metric TEXT NOT NULL, weight TEXT NOT NULL, updated_at TEXT NOT NULL,
+    PRIMARY KEY (source_code, report_id)
+);
+CREATE TABLE IF NOT EXISTS src_links (
+    link_id TEXT PRIMARY KEY, left_source TEXT NOT NULL, left_name TEXT NOT NULL,
+    right_source TEXT NOT NULL, right_name TEXT NOT NULL, state TEXT NOT NULL,
+    created_at TEXT NOT NULL, confirmed_at TEXT, note TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_src_links_state ON src_links(state);
+CREATE TABLE IF NOT EXISTS src_revisions (
+    revision INTEGER PRIMARY KEY, status TEXT NOT NULL, digest TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL, created_at TEXT NOT NULL,
+    published_at TEXT, note TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS src_live (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    live_revision INTEGER
+);
 """
 
 

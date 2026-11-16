@@ -14,6 +14,7 @@
 | M5 版本区间与批次 | 版本台账、提交新版、拒绝陈旧、批次历史 | `GET /api/versions`、`POST /api/versions/submit`、`GET /api/batches`、`/versions` |
 | M6 影响面与导出 | 影响分、四账、指标/边/冲突/清单导出 | `GET /api/impact`、`GET /api/reconcile`、`GET /api/export/*`、`/impact` |
 | M7 下线影响 | 受影响面、替代建议、迁移次序、阻断项、清单导出 | `GET /api/retire`、`POST /api/retire`、`GET /api/retire/order.csv`、`/retire` |
+| M8 多来源合并 | 来源接入、等价关系链路、隔离、草稿/原子发布、现网图与多源影响面 | `POST /api/sourcing/ingest`、`GET/POST /api/sourcing/links`、`POST /api/sourcing/revisions/*`、`GET /api/sourcing/live`、`GET /api/sourcing/impact`、`/sourcing` |
 
 ## 核心规则
 
@@ -28,6 +29,10 @@
 7. **下线迁移**：环按强连通分量计数，一个分量只出一个环，单点只有自环才算环；
    迁移次序按「依赖方先迁、被依赖方后下线」做确定性排序，环内指标进阻断表，
    同名指标按评估日生效版本说清下的是哪一版。
+8. **多来源同名合并**：身份键是 `(来源, 指标名)`，同名指标在各来源内独立成节点；
+   只有已确认的等价关系才用并查集连成链路，代表元取来源优先级最高者；
+   未确认来源/关系先隔离不进现网，确认后整版原子发布、全量切换现网图与影响面，
+   发布未完成继续展示上一版结果；同一来源同内容重跑按摘要复用，不新增节点或报表。
 
 定义、单位、空值、去重键、账目等式见 `docs/DATA-DICTIONARY.md`；模块与陷阱登记见 `docs/DEPTH.md`。
 
@@ -40,7 +45,15 @@ curl -s 127.0.0.1:18206/api/graph | head -c 400
 curl -s "127.0.0.1:18206/api/impact?metric=销售额"
 ```
 
-页面：<http://127.0.0.1:18206/>（接入）、`/contract`、`/diagnostics`、`/graph`、`/versions`、`/impact`、`/retire`。
+页面：<http://127.0.0.1:18206/>（接入）、`/contract`、`/diagnostics`、`/graph`、`/versions`、`/impact`、`/retire`、`/sourcing`。
+
+多来源合并（M8）：
+
+```bash
+curl -s -X POST 127.0.0.1:18206/api/sourcing/sample-bundle
+curl -s -X POST 127.0.0.1:18206/api/sourcing/revisions/publish-latest
+curl -s "127.0.0.1:18206/api/sourcing/impact?source=bi_hq&metric=销售额"
+```
 
 测试：
 
@@ -61,6 +74,7 @@ python3 -m pytest -q
 | `sample_data/metric_versions.csv` | 区间重叠、起止倒挂、未注册指标 |
 | `sample_data/report_usage.csv` | 报表引用未注册指标 |
 | `sample_data/retire_requests.csv` | 重复请求行、请求指向未注册指标（已下线指标） |
+| `sample_data/sourcing/` | 四个 BI 同名指标、各来源报表、已确认/待确认等价关系（M8） |
 
 ## 已知不覆盖
 
@@ -76,10 +90,10 @@ python3 -m pytest -q
 ```text
 app/
   main.py config.py errors.py reasons.py manifest.py store.py web.py
-  modules/m1_ingest … m7_retire      # 每模块：handler + service + 规则文件
-  templates/                         # base + 7 页
-  static/                            # theme/layout/components.css + 4 个 js
+  modules/m1_ingest … m7_retire m8_sourcing  # 每模块：handler + service + 规则文件
+  templates/                         # base + 8 页
+  static/                            # theme/layout/components.css + 5 个 js
 docs/  DEPTH.md DATA-DICTIONARY.md DSL-GRAMMAR.md
 tests/ conftest.py + 每模块测试 + test_e2e.py + fixtures/
-sample_data/
+sample_data/  sample_data/sourcing/  # M8 多来源样例
 ```

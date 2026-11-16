@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="sec">
+  <h2>规则</h2>
+  <div class="cmd">
+    <pre>curl -s -X POST 127.0.0.1:18206/api/sourcing/sample-bundle</pre>
+    <button class="copy" type="button" data-copy>复制</button>
+  </div>
+  <ul class="rule-list">
+    <li><b>来源内独立：</b>{{ payload.overview.groups.rules.priority if payload.overview else '代表元取来源优先级最高者' }}</li>
+    <li><b>隔离：</b>同名指标在各自来源内独立成节点；未确认来源与未确认等价关系先隔离</li>
+    <li><b>全量切换：</b>确认后整版原子发布并切换现网图与影响面；发布未完成继续展示旧版本结果</li>
+    <li><b>幂等：</b>同一来源同内容重跑按内容摘要复用，不新增节点或报表</li>
+  </ul>
+  <div class="form-row">
+    <button type="button" class="act" data-action="bundle">载入样例来源</button>
+    <button type="button" class="act" data-action="publish">确认并发布现网</button>
+    <span class="msg" id="sourcing-msg" role="status" aria-live="polite"></span>
+  </div>
+</section>
+
+<div class="sec-rule" aria-hidden="true"></div>
+
+<section class="sec">
+  <h2>来源（按优先级）</h2>
+  {% if payload.overview and payload.overview.per_source %}
+  <table class="tbl">
+    <thead><tr><th>来源</th><th>名称</th><th class="num">优先级</th><th class="num">指标节点</th><th class="num">报表</th><th class="num">接入次数</th></tr></thead>
+    <tbody>
+      {% for row in payload.overview.per_source %}
+      <tr>
+        <td class="mono">{{ row.source }}</td>
+        <td>{{ row.label }}</td>
+        <td class="num">{{ row.priority }}</td>
+        <td class="num">{{ row.metrics }}</td>
+        <td class="num">{{ row.reports }}</td>
+        <td class="num">{{ row.runs }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">还没有来源接入。</p>
+  {% endif %}
+</section>
+
+<div class="sec-rule" aria-hidden="true"></div>
+
+<section class="sec">
+  <h2>等价关系链路</h2>
+  {% if payload.overview and payload.overview.links %}
+  <dl class="kv">
+    <dt>关系总数</dt><dd>{{ payload.overview.link_counts.total }}</dd>
+    <dt>已确认</dt><dd class="balanced">{{ payload.overview.link_counts.confirmed }}</dd>
+    <dt>待确认（隔离）</dt><dd class="{% if payload.overview.link_counts.pending %}unbalanced{% else %}balanced{% endif %}">{{ payload.overview.link_counts.pending }}</dd>
+  </dl>
+  <table class="tbl">
+    <thead><tr><th>关系</th><th>左端</th><th>右端</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody>
+      {% for link in payload.overview.links %}
+      <tr>
+        <td class="mono">{{ link.link_id }}</td>
+        <td class="mono">{{ link.left_source }} / {{ link.left_name }}</td>
+        <td class="mono">{{ link.right_source }} / {{ link.right_name }}</td>
+        <td>{% if link.state == 'confirmed' %}<span class="tag tag-ok">{{ link.state | status }}</span>{% else %}<span class="tag tag-review">{{ link.state | status }}</span>{% endif %}</td>
+        <td>{% if link.state != 'confirmed' %}<button type="button" class="act small" data-action="confirm" data-link="{{ link.link_id }}">确认</button>{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">还没有等价关系。</p>
+  {% endif %}
+</section>
+
+<div class="sec-rule" aria-hidden="true"></div>
+
+<section class="sec">
+  <h2>合并组与代表元</h2>
+  {% if payload.overview and payload.overview.groups.merged_groups %}
+  <table class="tbl">
+    <thead><tr><th>组</th><th>同名指标</th><th>代表元来源</th><th class="num">成员</th><th class="num">隔离</th><th>成员（来源 / 状态）</th></tr></thead>
+    <tbody>
+      {% for g in payload.overview.groups.merged_groups %}
+      <tr>
+        <td class="mono">{{ g.group_id }}</td>
+        <td>{{ g.metric_name }}</td>
+        <td>{{ g.canonical_source_label }} <span class="mark mark-dim">({{ g.canonical_source }})</span></td>
+        <td class="num">{{ g.member_count }}</td>
+        <td class="num {% if g.isolated_count %}unbalanced{% else %}balanced{% endif %}">{{ g.isolated_count }}</td>
+        <td class="mono">
+          {% for m in g.members %}<span class="chip chip-{{ m.state }}">{{ m.source_label }}:{{ m.state_label }}</span> {% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">还没有跨来源合并组。</p>
+  {% endif %}
+</section>
+
+<div class="sec-rule" aria-hidden="true"></div>
+
+<section class="sec">
+  <h2>现网版本</h2>
+  {% if payload.overview and payload.overview.revisions %}
+  <table class="tbl">
+    <thead><tr><th class="num">版本</th><th>状态</th><th class="num">现网节点</th><th class="num">等价边</th><th class="num">隔离成员</th><th>发布时间</th></tr></thead>
+    <tbody>
+      {% for rev in payload.overview.revisions %}
+      <tr>
+        <td class="num">v{{ rev.revision }}{% if rev.revision == payload.overview.live_revision %} ★{% endif %}</td>
+        <td>{% if rev.status == 'published' %}<span class="tag tag-ok">{{ rev.status | status }}</span>{% elif rev.status == 'staging' %}<span class="tag tag-review">{{ rev.status | status }}</span>{% else %}<span class="tag">{{ rev.status | status }}</span>{% endif %}</td>
+        <td class="num">{{ rev.digest[:8] }}</td>
+        <td class="num">—</td>
+        <td class="num">—</td>
+        <td class="mono">{{ (rev.published_at or '') | ts }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">还没有现网版本，发布后才生成现网图与影响面。</p>
+  {% endif %}
+  {% if payload.live and payload.live.has_live %}
+  <dl class="kv" style="margin-top:8px">
+    <dt>当前现网版本</dt><dd>v{{ payload.live.revision }}（{{ payload.live.published_at | ts }}）</dd>
+    <dt>现网节点</dt><dd>{{ payload.live.snapshot.counts.nodes }}</dd>
+    <dt>来源内依赖边</dt><dd>{{ payload.live.snapshot.counts.dep_edges }}</dd>
+    <dt>跨来源等价关系 / 双向边</dt><dd>{{ payload.live.snapshot.counts.equiv_pairs }} / {{ payload.live.snapshot.counts.equiv_edges }}</dd>
+    <dt>已解析报表</dt><dd>{{ payload.live.snapshot.counts.reports_resolved }} / {{ payload.live.snapshot.counts.reports_total }}</dd>
+    <dt>隔离成员（不进现网）</dt><dd class="{% if payload.live.snapshot.counts.isolated_members %}unbalanced{% else %}balanced{% endif %}">{{ payload.live.snapshot.counts.isolated_members }}</dd>
+  </dl>
+  {% else %}
+  <p class="empty msg-warn">{{ payload.live.notice if payload.live else '还没有现网版本。' }}</p>
+  {% endif %}
+</section>
+
+<div class="sec-rule" aria-hidden="true"></div>
+
+<section class="sec">
+  <h2>多源影响面</h2>
+  <form class="form-row" id="impact-form">
+    <label class="inline" for="im-source">来源</label>
+    <select id="im-source" style="width:auto">
+      {% for row in (payload.overview.per_source if payload.overview else []) %}
+      <option value="{{ row.source }}">{{ row.label }}（{{ row.source }}）</option>
+      {% endfor %}
+    </select>
+    <label class="inline" for="im-metric">指标</label>
+    <input id="im-metric" type="text" value="销售额" spellcheck="false" style="width:auto;min-width:160px">
+    <button type="submit">计算</button>
+  </form>
+  <div id="impact-result" class="scroll" style="margin-top:8px"></div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/sourcing.js" defer></script>{% endblock %}

@@ -1,0 +1,3 @@
+report_id,report_name,metric,weight
+TP-01,三方城市看板,销售额,1
+TP-02,三方热度榜,外部热度,0.75

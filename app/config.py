@@ -18,10 +18,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CHINA_TZ = dt.timezone(dt.timedelta(hours=8), "Asia/Shanghai")
 UTC = dt.timezone.utc
 
-RULE_VERSION = "metricreg/1.3.0"
+RULE_VERSION = "metricreg/1.4.0"
 DECIMAL_QUANT = Decimal("0.01")
 
-STAGES = ("ingest", "syntax", "diagnose", "graph", "version", "impact", "retire")
+STAGES = ("ingest", "syntax", "diagnose", "graph", "version", "impact", "retire",
+          "sourcing")
 STAGE_LABELS = {
     "ingest": "接入",
     "syntax": "语法",
@@ -30,8 +31,9 @@ STAGE_LABELS = {
     "version": "版本",
     "impact": "影响面",
     "retire": "下线",
+    "sourcing": "多源合并",
 }
-STAGE_FLOW = "接入 → 语法 → 诊断 → 依赖图 → 版本 → 影响面 → 下线"
+STAGE_FLOW = "接入 → 语法 → 诊断 → 依赖图 → 版本 → 影响面 → 下线 → 多源合并"
 
 # 聚合函数白名单：名称 → (返回类型, 说明用中文短名)
 AGGREGATORS = {
@@ -95,6 +97,11 @@ DIAG_ORDER = (
     "R_VERSION_AMBIGUOUS", "R_REPLACEMENT_PARTIAL", "R_VERSION_NONE",
     "R_REPORT_DANGLING", "R_REQUEST_DUPLICATE", "R_RING_MERGED",
     "R_ISOLATED_SKIPPED",
+    "S_SOURCE_UNKNOWN", "S_SOURCE_PARSE_FAILED", "S_LINK_UNKNOWN_MEMBER",
+    "S_LINK_DUPLICATE", "S_LINK_PENDING_ISOLATED", "S_LINK_CONFIRMED",
+    "S_GROUP_CANONICAL", "S_MEMBER_ISOLATED", "S_REVISION_STAGING",
+    "S_REVISION_PUBLISHED", "S_CUTOVER_ATOMIC", "S_NO_PUBLISHED",
+    "S_REPLAY_NO_NEW_NODE",
     "B_IDEMPOTENT_REPLAY", "E_BOM_STRIPPED",
     "E_CRLF_NORMALIZED", "E_CHARSET_FALLBACK",
 )
@@ -121,6 +128,52 @@ OP_PRECEDENCE = {"+": 1, "-": 1, "*": 2, "/": 2}
 
 # 版本区间：valid_to 留空视为未关闭，用哨兵日期参与比较
 OPEN_END = "9999-12-31"
+
+# ---- M8 多来源同名指标合并 ----
+# 来源优先级：数字越小优先级越高；合并链路的代表元永远取优先级最高（数字最小）的来源。
+# 顺序只在这里定义，模块其余部分只读，换来源顺序结论随之确定且可复算。
+SOURCE_PRIORITY = (
+    ("bi_hq", "总部 BI", 10),
+    ("bi_store", "门店 BI", 20),
+    ("bi_channel", "渠道 BI", 30),
+    ("bi_third", "三方 BI", 40),
+)
+SOURCE_LABELS = {code: label for code, label, _ in SOURCE_PRIORITY}
+SOURCE_RANK = {code: rank for code, _, rank in SOURCE_PRIORITY}
+
+# 等价关系确认状态：未确认先隔离，确认后才进合并链路。
+LINK_PENDING = "pending"
+LINK_CONFIRMED = "confirmed"
+LINK_STATES = (LINK_PENDING, LINK_CONFIRMED)
+LINK_STATE_LABELS = {LINK_PENDING: "待确认", LINK_CONFIRMED: "已确认"}
+
+# 合并组成员状态：隔离（来源或关系未确认）/ 已进链路 / 代表元。
+MEMBER_ISOLATED = "isolated"
+MEMBER_LINKED = "linked"
+MEMBER_CANONICAL = "canonical"
+MEMBER_STATE_LABELS = {
+    MEMBER_ISOLATED: "隔离",
+    MEMBER_LINKED: "链路内",
+    MEMBER_CANONICAL: "代表元",
+}
+
+# 现网版本发布状态：staging 草稿（未完成发布，继续展示旧版）、published 已全量切换、
+# superseded 已被更新的发布版取代。读路径只认 published 的最新一版。
+REV_STAGING = "staging"
+REV_PUBLISHED = "published"
+REV_SUPERSEDED = "superseded"
+REV_STATE_LABELS = {
+    REV_STAGING: "待发布",
+    REV_PUBLISHED: "现网",
+    REV_SUPERSEDED: "旧版",
+}
+
+# M8 固定规则文案，页面、导出、测试共用同一份说明。
+SOURCE_PRIORITY_RULE = "代表元取来源优先级最高者：" + " > ".join(
+    label for _, label, _ in SOURCE_PRIORITY)
+SOURCE_ISOLATION_RULE = "同名指标在各自来源内独立成节点；未确认来源与未确认等价关系先隔离"
+SOURCE_CUTOVER_RULE = "确认后整版原子发布并全量切换现网图与影响面；发布未完成继续展示旧版本结果"
+SOURCE_IDEMPOTENT_RULE = "同一来源同内容重跑按内容摘要复用，不新增节点或报表"
 
 
 @dataclass(frozen=True)

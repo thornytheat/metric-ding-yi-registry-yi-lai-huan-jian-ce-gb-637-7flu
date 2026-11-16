@@ -1,0 +1,5 @@
+source,dsl,reports
+bi_hq,bi_hq.dsl,bi_hq_reports.csv
+bi_store,bi_store.dsl,bi_store_reports.csv
+bi_channel,bi_channel.dsl,bi_channel_reports.csv
+bi_third,bi_third.dsl,bi_third_reports.csv
